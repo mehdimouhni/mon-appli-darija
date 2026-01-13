@@ -2,139 +2,165 @@ import streamlit as st
 import random
 from gtts import gTTS
 import io
-import pandas as pd
 
-# --- CONFIGURATION & STYLE ---
-st.set_page_config(page_title="Darija Pro 🇲🇦", layout="wide")
+# --- CONFIGURATION ET DESIGN ---
+st.set_page_config(page_title="Darija Master Pro 🇲🇦", layout="wide")
+
 st.markdown("""
     <style>
-    .stProgress > div > div > div > div { background-color: #2ecc71; }
-    .stButton>button { border-radius: 10px; height: 3em; }
+    @import url('https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;700&display=swap');
+    html, body, [class*="css"] { font-family: 'Ubuntu', sans-serif; }
+    .main { background-color: #f7f9fc; }
+    .stButton>button {
+        width: 100%; border-radius: 12px; height: 3.5em;
+        background-color: white; color: #1E3A8A;
+        border: 2px solid #E5E7EB; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+        font-weight: bold; transition: all 0.2s;
+    }
+    .stButton>button:hover { border-color: #1E3A8A; color: #1E3A8A; transform: translateY(-2px); }
+    .card {
+        background: white; padding: 2rem; border-radius: 20px;
+        box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+        text-align: center; border-top: 5px solid #1E3A8A;
+        margin-bottom: 2rem;
+    }
     </style>
     """, unsafe_allow_stdio=True)
 
-# --- BASE DE DONNÉES ÉLARGIE (Inspirée de Speak Moroccan) ---
+# --- BASE DE DONNÉES COMPLÈTE ---
 RAW_DATA = {
     "✨ Essentiels": [
         {"d": "Iyyeh", "f": "Oui"}, {"d": "Lla", "f": "Non"}, {"d": "Afak", "f": "S'il te plaît"},
-        {"d": "Shokran", "f": "Merci"}, {"d": "Wakha", "f": "D'accord"}, {"d": "Daba", "f": "Maintenant"},
-        {"d": "Mashi moshkil", "f": "Pas de problème"}, {"d": "Safi", "f": "Ça suffit / Ok"}
+        {"d": "Shokran", "f": "Merci"}, {"d": "Wakha", "f": "D'accord"}, {"d": "Mashi moshkil", "f": "Pas de problème"}, {"d": "Safi", "f": "C'est bon / Ok"}
     ],
     "🤝 Présentation": [
         {"d": "Smiyati...", "f": "Je m'appelle..."}, {"d": "Mnin nta?", "f": "D'où viens-tu ?"},
-        {"d": "Msherefin", "f": "Enchanté"}, {"d": "Fin kheddam?", "f": "Où travailles-tu ?"},
-        {"d": "Ma fhemtsh", "f": "Je n'ai pas compris"}
+        {"d": "Msherefin", "f": "Enchanté"}, {"d": "Smili", "f": "Excuse-moi"}, {"d": "Ki dayer?", "f": "Comment vas-tu ?"}
     ],
-    "🛒 Marché & Prix": [
-        {"d": "Chhal?", "f": "Combien ?"}, {"d": "Ghalia bzaf", "f": "C'est trop cher"},
-        {"d": "Atini...", "f": "Donne-moi..."}, {"d": "Bghit hada", "f": "Je veux celui-là"}
+    "🏃 Verbes de Base": [
+        {"d": "Mshi", "f": "Aller"}, {"d": "Koul", "f": "Manger"}, {"d": "Shrab", "f": "Boire"},
+        {"d": "Dir", "f": "Faire"}, {"d": "N'ass", "f": "Dormir"}, {"d": "Shouf", "f": "Regarder"}
+    ],
+    "🗣️ Mes Premières Phrases": [
+        {"d": "Bghit n'mshi l...", "f": "Je veux aller à..."}, {"d": "Fiyya l'jou'e", "f": "J'ai faim"},
+        {"d": "Twahashtek", "f": "Tu me manques"}, {"d": "Fin ghadin?", "f": "Où allons-nous ?"}
+    ],
+    "🔢 Chiffres": [
+        {"d": "Wahed", "f": "Un"}, {"d": "Jouj", "f": "Deux"}, {"d": "Tlata", "f": "Trois"},
+        {"d": "Arba'a", "f": "Quatre"}, {"d": "Khamsa", "f": "Cinq"}, {"d": "Ashra", "f": "Dix"}
+    ],
+    "🚕 Transport": [
+        {"d": "Fin kayn taxi?", "f": "Où est le taxi ?"}, {"d": "Sir direct", "f": "Allez tout droit"},
+        {"d": "Hna afak", "f": "Ici s'il vous plaît"}
+    ],
+    "👕 Shopping": [
+        {"d": "Chhal hada?", "f": "Combien ça coûte ?"}, {"d": "Ghalia bzaf", "f": "C'est trop cher"},
+        {"d": "Naqess shwiya", "f": "Baisse un peu"}
     ]
 }
 
-# --- INITIALISATION DE LA MÉMOIRE ---
-if 'mastery' not in st.session_state:
-    # On initialise le score de maîtrise à 0 pour chaque mot
-    st.session_state.mastery = {}
-    for t in RAW_DATA:
-        for m in RAW_DATA[t]:
-            st.session_state.mastery[m['d']] = 0
+# --- INITIALISATION SESSION ---
+if 'user' not in st.session_state: st.session_state.user = None
+if 'reports' not in st.session_state: st.session_state.reports = []
+if 'mastery' not in st.session_state: 
+    st.session_state.mastery = {m['d']: 0 for t in RAW_DATA for m in RAW_DATA[t]}
 
-if 'score' not in st.session_state: st.session_state.score = 0
+# --- ECRAN DE CONNEXION ---
+if st.session_state.user is None:
+    st.title("🇲🇦 Darija Master")
+    col1, col2 = st.columns(2)
+    with col1:
+        name = st.text_input("Ton prénom / Pseudo")
+        if st.button("Commencer l'apprentissage"):
+            if name:
+                st.session_state.user = name
+                st.rerun()
+    st.stop()
 
-# --- FONCTIONS LOGIQUES ---
-def get_audio(text):
-    # 'ar' avec un accent plus lent pour mieux décomposer
-    tts = gTTS(text=text, lang='ar', slow=False)
-    fp = io.BytesIO()
-    tts.write_to_fp(fp)
-    return fp
-
+# --- LOGIQUE DE JEU ---
 def next_question():
     theme = st.session_state.current_theme
-    # On pioche en priorité les mots non maîtrisés (score < 5)
-    pool = [m for m in RAW_DATA[theme] if st.session_state.mastery[m['d']] < 5]
-    if not pool: pool = RAW_DATA[theme] # Si tout est fini, on reset le thème
-    
+    pool = RAW_DATA[theme]
     st.session_state.current_word = random.choice(pool)
-    st.session_state.mode = random.choice(["D->F", "F->D"]) # Alternance automatique
+    st.session_state.mode = random.choice(["D->F", "F->D"])
     
-    # Génération des options
     correct = st.session_state.current_word['f'] if st.session_state.mode == "D->F" else st.session_state.current_word['d']
-    others = [ (w['f'] if st.session_state.mode == "D->F" else w['d']) for w in RAW_DATA[theme] if w['d'] != st.session_state.current_word['d']]
+    others = [(w['f'] if st.session_state.mode == "D->F" else w['d']) for w in pool if w['d'] != st.session_state.current_word['d']]
+    random.shuffle(others)
     
-    opts = random.sample(others, min(len(others), 3)) + [correct]
+    opts = list(dict.fromkeys([correct] + others[:3]))
     random.shuffle(opts)
     st.session_state.options = opts
     st.session_state.answered = False
 
-# --- INTERFACE ---
-st.title("🇲🇦 Darija Master Pro")
-
-# Barre latérale : Progression par thématique
+# --- INTERFACE PRINCIPALE ---
 with st.sidebar:
-    st.header("📊 Tes Progrès")
+    st.title(f"Salut, {st.session_state.user}!")
+    st.header("📊 Ta Maîtrise")
     for t in RAW_DATA:
-        total = len(RAW_DATA[t])
-        # Un mot est "acquis" si son score de maîtrise est >= 5
         acquis = sum(1 for m in RAW_DATA[t] if st.session_state.mastery[m['d']] >= 5)
-        st.write(f"**{t}** ({acquis}/{total})")
-        st.progress(acquis / total)
+        st.write(f"{t} ({acquis}/{len(RAW_DATA[t])})")
+        st.progress(acquis / len(RAW_DATA[t]))
     
-    st.divider()
-    if st.button("Réinitialiser ma mémoire"):
-        st.session_state.mastery = {k: 0 for k in st.session_state.mastery}
+    if st.button("Se déconnecter"):
+        st.session_state.user = None
         st.rerun()
 
-# Initialisation du jeu si vide
+# Initialisation de la première question
 if 'current_word' not in st.session_state:
-    st.session_state.current_theme = list(RAW_DATA.keys())[0]
+    st.session_state.current_theme = "✨ Essentiels"
     next_question()
 
-# Zone de jeu
-col_t, col_s = st.columns([2,1])
-with col_t:
-    theme_choice = st.selectbox("Choisir une thématique :", list(RAW_DATA.keys()), index=list(RAW_DATA.keys()).index(st.session_state.current_theme))
-    if theme_choice != st.session_state.current_theme:
-        st.session_state.current_theme = theme_choice
-        next_question()
-        st.rerun()
+# Zone centrale
+theme_choice = st.selectbox("🎯 Choisis ta thématique :", list(RAW_DATA.keys()))
+if theme_choice != st.session_state.current_theme:
+    st.session_state.current_theme = theme_choice
+    next_question()
+    st.rerun()
 
-# Affichage de la question
+st.markdown(f"""<div class="card">
+    <p style="color: #6B7280; font-size: 1.2rem;">{"Traduisez vers le Français" if st.session_state.mode == "D->F" else "Traduisez vers le Darija"}</p>
+    <h1 style="color: #1E3A8A; font-size: 3.5rem; margin: 10px 0;">
+        {st.session_state.current_word['d'] if st.session_state.mode == "D->F" else st.session_state.current_word['f']}
+    </h1>
+</div>""", unsafe_allow_stdio=True)
+
+# Boutons d'action
+c1, c2, c3 = st.columns([1,1,1])
+with c1:
+    if st.button("🔈 Écouter l'accent"):
+        tts = gTTS(text=st.session_state.current_word['d'], lang='ar')
+        fp = io.BytesIO()
+        tts.write_to_fp(fp)
+        st.audio(fp, format='audio/mp3', autoplay=True)
+with c2:
+    if st.button("⚠️ Signaler une erreur"):
+        st.session_state.reports.append(st.session_state.current_word['d'])
+        st.toast("Signalement enregistré !")
+
+# Options de réponse
 st.write("---")
-mode_label = "Traduisez vers le Français :" if st.session_state.mode == "D->F" else "Traduisez vers le Darija :"
-st.write(f"### {mode_label}")
-
-q_text = st.session_state.current_word['d'] if st.session_state.mode == "D->F" else st.session_state.current_word['f']
-st.info(f"## {q_text}")
-
-# Bouton Audio (uniquement si le mot affiché ou à deviner est en Darija)
-if st.button("🔈 Prononciation"):
-    audio = get_audio(st.session_state.current_word['d'])
-    st.audio(audio, format='audio/mp3', autoplay=True)
-
-# Réponses
+cols = st.columns(2)
 correct_ans = st.session_state.current_word['f'] if st.session_state.mode == "D->F" else st.session_state.current_word['d']
 
-cols = st.columns(2)
 for i, opt in enumerate(st.session_state.options):
     with cols[i % 2]:
-        if st.button(opt, key=f"btn_{i}", use_container_width=True):
+        if st.button(opt, key=f"btn_{i}"):
             if opt == correct_ans:
                 if not st.session_state.answered:
-                    st.success("🎯 Correct !")
+                    st.balloons()
                     st.session_state.mastery[st.session_state.current_word['d']] += 1
-                    st.session_state.score += 1
                     st.session_state.answered = True
+                    st.success("🎯 Parfait !")
             else:
-                st.error("Faux, réessaie !")
-                st.session_state.mastery[st.session_state.current_word['d']] = max(0, st.session_state.mastery[st.session_state.current_word['d']] - 1)
+                st.error("Ce n'est pas ça...")
 
 if st.session_state.answered:
-    if st.button("Mot suivant ➡️", type="primary"):
+    if st.button("Continuer ➡️", type="primary"):
         next_question()
         st.rerun()
 
-# Dictionnaire du thème en bas
-with st.expander("📚 Voir le dictionnaire de ce thème"):
-    df = pd.DataFrame(RAW_DATA[st.session_state.current_theme])
-    st.table(df)
+# Section Admin cachée pour les signalements
+if st.session_state.user.lower() == "admin":
+    with st.expander("🛠️ Signalements d'erreurs"):
+        st.write(st.session_state.reports)
