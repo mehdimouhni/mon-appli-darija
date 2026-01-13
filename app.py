@@ -72,10 +72,16 @@ if 'mastery' not in st.session_state:
     st.session_state.mastery = {m['d']: 0 for t in RAW_DATA for m in RAW_DATA[t]}
 
 def play_audio(text_ar):
-    tts = gTTS(text=text_ar, lang='ar')
-    fp = io.BytesIO()
-    tts.write_to_fp(fp)
-    st.audio(fp, format='audio/mp3', autoplay=True)
+    try:
+        tts = gTTS(text=text_ar, lang='ar')
+        fp = io.BytesIO()
+        tts.write_to_fp(fp)
+        # On remet le curseur au début du fichier mémoire
+        fp.seek(0)
+        # On affiche le lecteur SANS autoplay pour éviter le blocage mobile
+        st.audio(fp, format='audio/mp3')
+    except Exception as e:
+        st.error("L'audio n'a pas pu être chargé. Réessayez.")
 
 def next_question():
     theme = st.session_state.current_theme
