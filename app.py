@@ -3,21 +3,21 @@ import random
 from gtts import gTTS
 import io
 
-# --- CONFIGURATION ---
+# --- CONFIGURATION & DESIGN ---
 st.set_page_config(page_title="Darija Master Pro", layout="wide")
 
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&family=Amiri:wght@400;700&display=swap');
     html, body, [class*="css"] { font-family: 'Poppins', sans-serif; }
-    .arabe-text { font-family: 'Amiri', serif; font-size: 3rem; color: #065F46; direction: rtl; }
-    .arabe-btn { font-family: 'Amiri', serif; font-size: 1.2rem; }
+    .arabe-text { font-family: 'Amiri', serif; font-size: 3.5rem; color: #065F46; direction: rtl; line-height: 1.2; }
     .flashcard {
-        background-color: white; padding: 25px; border-radius: 15px;
+        background-color: white; padding: 30px; border-radius: 15px;
         box-shadow: 0 4px 10px rgba(0,0,0,0.05); text-align: center;
         border-top: 5px solid #10B981; margin-bottom: 20px;
     }
-    .stButton>button { border-radius: 10px; height: auto; padding: 10px; font-weight: bold; }
+    .stButton>button { border-radius: 10px; font-weight: bold; }
+    .btn-darija { background-color: #f0fff4 !important; border: 1px solid #c6f6d5 !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -83,38 +83,44 @@ def next_question():
     st.session_state.current_word = random.choice(pool)
     st.session_state.mode = random.choice(["D->F", "F->D"])
     
-    # Préparation des options
-    correct_obj = st.session_state.current_word
-    others = [w for w in pool if w['d'] != correct_obj['d']]
-    random.shuffle(others)
-    st.session_state.options_objects = list(dict.fromkeys([correct_obj] + others[:3]))
-    random.shuffle(st.session_state.options_objects)
+    # Correction du bug : On mélange les indices au lieu des objets
+    correct_idx = pool.index(st.session_state.current_word)
+    other_indices = [i for i in range(len(pool)) if i != correct_idx]
+    random.shuffle(other_indices)
+    
+    selected_indices = [correct_idx] + other_indices[:3]
+    random.shuffle(selected_indices)
+    
+    st.session_state.options = [pool[i] for i in selected_indices]
     st.session_state.answered = False
 
 # --- LOGIN ---
 if st.session_state.user is None:
     st.title("🇲🇦 Darija Master")
-    name = st.text_input("Pseudo :")
-    if st.button("Lancer"):
+    name = st.text_input("Pseudo pour ta session :")
+    if st.button("Lancer l'apprentissage"):
         if name: st.session_state.user = name; st.rerun()
     st.stop()
 
 # --- SIDEBAR & PROGRESSION ---
 with st.sidebar:
     st.header(f"👤 {st.session_state.user}")
-    st.subheader("📊 Progression")
+    st.divider()
+    st.subheader("📊 Ta Progression")
     for t in RAW_DATA:
         total = len(RAW_DATA[t])
-        done = sum(1 for m in RAW_DATA[t] if st.session_state.mastery[m['d']] >= 5)
-        st.write(f"{t} ({done}/{total})")
-        st.progress(done / total if total > 0 else 0)
+        # Un mot est considéré en cours si mastery > 0
+        points = sum(st.session_state.mastery[m['d']] for m in RAW_DATA[t])
+        max_points = total * 5
+        st.write(f"**{t}**")
+        st.progress(min(points / max_points, 1.0) if max_points > 0 else 0)
 
-# --- JEU ---
+# --- ZONE DE JEU ---
 if 'current_word' not in st.session_state:
     st.session_state.current_theme = "✨ Essentiels"
     next_question()
 
-theme_choice = st.selectbox("🎯 Thème :", list(RAW_DATA.keys()))
+theme_choice = st.selectbox("🎯 Choisir un thème :", list(RAW_DATA.keys()))
 if theme_choice != st.session_state.current_theme:
     st.session_state.current_theme = theme_choice
     next_question()
@@ -122,41 +128,51 @@ if theme_choice != st.session_state.current_theme:
 
 word = st.session_state.current_word
 st.markdown(f"""<div class="flashcard">
-    <div style="color:#6B7280">{"En Français ?" if st.session_state.mode == "D->F" else "En Darija ?"}</div>
+    <div style="color:#6B7280; margin-bottom:10px">{"Comment dit-on en Français ?" if st.session_state.mode == "D->F" else "Comment dit-on en Darija ?"}</div>
     <div class="arabe-text">{word['a'] if st.session_state.mode == "D->F" else ""}</div>
     <div style="font-size:2.5rem; font-weight:600">{word['d'] if st.session_state.mode == "D->F" else word['f']}</div>
 </div>""", unsafe_allow_html=True)
 
-# RÉPONSES AVEC AUDIO
+# BOUTON AUDIO PRINCIPAL (Si Darija est affiché)
+if st.session_state.mode == "D->F":
+    if st.button("🔈 Écouter la question"):
+        play_audio(word['a'])
+
+# RÉPONSES
+st.write("---")
 cols = st.columns(2)
-for i, opt in enumerate(st.session_state.options_objects):
+for i, opt in enumerate(st.session_state.options):
     with cols[i % 2]:
-        # Bouton de réponse (Bilingue si Darija)
-        label = opt['f'] if st.session_state.mode == "D->F" else f"{opt['d']} / {opt['a']}"
-        if st.button(label, key=f"ans_{i}", use_container_width=True):
+        # Texte du bouton
+        btn_label = opt['f'] if st.session_state.mode == "D->F" else f"{opt['d']} / {opt['a']}"
+        
+        # Ligne de réponse
+        if st.button(btn_label, key=f"ans_{i}", use_container_width=True):
             if opt['d'] == word['d']:
                 if not st.session_state.answered:
-                    st.success("Bravo !")
-                    st.session_state.mastery[word['d']] += 1
+                    st.success("🎯 Bravo !")
+                    st.session_state.mastery[word['d']] = min(st.session_state.mastery[word['d']] + 1, 5)
                     st.session_state.answered = True
                     st.balloons()
             else:
-                st.error("Raté !")
-        
-        # Petit bouton audio sous la réponse si mode F->D
+                st.error(f"Faux ! La réponse était : {word['f'] if st.session_state.mode == 'D->F' else word['d']}")
+                st.session_state.answered = True
+
+        # Audio SOUS les propositions (uniquement si les propositions sont en Darija)
         if st.session_state.mode == "F->D":
-            if st.button(f"🔈 Écouter", key=f"vol_{i}"):
+            if st.button(f"🔈 Écouter l'option {i+1}", key=f"vol_{i}"):
                 play_audio(opt['a'])
 
 if st.session_state.answered:
-    if st.button("Suivant ➡️", type="primary"):
-        next_question(); st.rerun()
+    if st.button("Question Suivante ➡️", type="primary", use_container_width=True):
+        next_question()
+        st.rerun()
 
 # --- DICTIONNAIRE ---
 st.divider()
-with st.expander("📚 Dictionnaire du thème"):
+with st.expander(f"📚 Dictionnaire complet : {st.session_state.current_theme}"):
     for item in RAW_DATA[st.session_state.current_theme]:
-        col_d1, col_d2 = st.columns([3, 1])
-        col_d1.write(f"**{item['f']}** = {item['d']} ({item['a']})")
-        if col_d2.button("🔈", key=f"dict_{item['d']}"):
+        c1, c2 = st.columns([4, 1])
+        c1.write(f"**{item['f']}** : {item['d']} ({item['a']})")
+        if c2.button("🔈", key=f"dic_{item['d']}"):
             play_audio(item['a'])
